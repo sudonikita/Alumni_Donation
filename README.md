@@ -1,4 +1,4 @@
-# Alumni_Donation
+# Alumni Donation Study
 
 Alumni donations are an important source of revenue for colleges and universities. Understanding the factors that influence increases in the percentage of alumni who make a donation could help administrators implement policies that could lead to increased revenues.
 
