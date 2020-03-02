@@ -1,0 +1,147 @@
+
+
+```{r}
+library(ggplot2)
+library(pdp)
+library(investr)
+```
+
+#To determine the factors that influence increases in the percentage of alumni who make a donation
+
+```{r}
+alumni <- read.csv("https://bgreenwell.github.io/uc-bana7052/data/alumni.csv")
+```
+
+#Response Variable - Alumni Giving Rate
+#Predictor Variable - Percentage of classes with fewer than 20 students
+
+EDA
+#Understanding Nature of Variables
+
+```{r}
+summary(alumni$alumni_giving_rate)
+summary(alumni$percent_of_classes_under_20)
+
+plot(alumni$alumni_giving_rate~alumni$percent_of_classes_under_20)
+class(alumni$alumni_giving_rate) 
+class(alumni$percent_of_classes_under_20)
+range(alumni$alumni_giving_rate)
+range(alumni$percent_of_classes_under_20)
+boxplot.stats(alumni$alumni_giving_rate) #, main="Outliers of Giving Rate") #No outliers
+boxplot.stats(alumni$percent_of_classes_under_20) #No outliers
+
+#Correlationcoeff
+cor(alumni$alumni_giving_rate, alumni$percent_of_classes_under_20, method = c("pearson"))
+cor.test(alumni$alumni_giving_rate, alumni$percent_of_classes_under_20, method = c("pearson"))
+
+#Scatterplot
+viz <- plot(alumni$alumni_giving_rate, alumni$percent_of_classes_under_20, main="Scatterplot",xlab="Alumni Giving Rate ", ylab="Percent of Classes with fewer than 20 students ", pch=20)
+```
+
+#Simple Linear Regression
+
+The donation rate increases by 0.66 points for every unit increase in the class percentage.
+```{r}
+slr <- lm(alumni_giving_rate ~ percent_of_classes_under_20, alumni)
+summary(slr)
+```
+
+```{r}
+alpha <- 0.05
+confint(slr, level = 0.95)
+slope <- (summary(slr)$coef["percent_of_classes_under_20", 1:2])
+t_obs <- (slope["Estimate"]) / (slope["Std. Error"])
+n <- length(alumni$alumni_giving_rate)
+t_critical <- qt(1 - alpha/2, n - 2)
+p_value <- 2*pt(abs(t_obs), df = n - 2, lower.tail = FALSE)
+```
+
+```{r}
+anova(slr)
+f_stat <- anova(slr)$"F value"
+r_squared <- summary(slr)$r.squared
+sqrt(r_squared)
+```
+
+#Multiple Linear Regression
+
+Now we see that student faculty ratio  is signifcant and percent of classes under 20 is not. In SLR, it was seen that percent of classes was significant, Implying that there might be correlation between them. Hence also check for correlation.
+```{r}
+model1 <- lm(alumni_giving_rate ~ student_faculty_ratio + 
+               percent_of_classes_under_20 + private, data = alumni) 
+summary(model1)
+B0 <- model1$coefficients["(Intercept)"]
+B1 <- model1$coefficients["x1"]
+B2 <- model1$coefficients["x2"]
+cor(alumni$student_faculty_ratio, alumni$percent_of_classes_under_20)
+```
+
+
+```{r}
+#--- Scatter Plot Pair wise ---
+df <- data.frame(alumni$student_faculty_ratio, alumni$percent_of_classes_under_20, alumni$alumni_giving_rate)
+pairs(df, cex = 1.2, pch = 19, 
+      col = adjustcolor("darkred", alpha.f = 0.5))
+```
+
+#Residual Plots
+
+The revised standard residual vs fitted values plot indicate that the assumption of linearity and constant variance is being met as the data points are scattered randomly across the plot.
+
+The residuals almost follow a normal distribution as seen in the qq plot
+```{r}
+plot(model1)
+```
+
+#Variable Selection
+
+First, We use backward aic selection, and get the model as :
+alumni_giving_rate ~ student_faculty_ratio + private
+
+```{r}
+bk <- step(model1)
+AIC(bk)
+```
+
+
+Next we use, foward selection with AIC
+```{r}
+model0 <- lm(alumni_giving_rate~1, data=alumni)
+fw <- step(model0, scope=c(lower=model0, upper=model1), direction = "forward")
+summary(fw)
+AIC(fw)
+```
+
+Since backward selection with AIC, gives us a lower AIC, we choose the final model to be: alumni_giving_rate ~ student_faculty_ratio + private
+
+Here, the curve follows a slightly exponential curve, which is an indication of non linearty. 
+```{r}
+model_final <- lm(alumni_giving_rate ~ student_faculty_ratio + private, data = alumni)
+summary(model_final)
+plot(model_final)
+```
+Due to the above seen non linearly, we do box cox Transformation
+The lambda obtained from box cox is approximately 0.5
+```{r}
+library(MASS)
+boxcox(alumni_giving_rate ~ student_faculty_ratio, data = alumni)
+```
+
+
+Using the step function on box coxed dependent variable in the model, we get the following as the final model : 
+alumni_giving_rate_boxcox ~ student_faculty_ratio + private
+The adj r square is 60%, which means 60% variance in Y is explained by the model predictors
+```{r}
+
+lambda=0.5
+alumni$alumni_giving_rate_boxcox <- (alumni$alumni_giving_rate^lambda-1)/lambda
+
+scope <- lm(alumni_giving_rate_boxcox ~
+  percent_of_classes_under_20 +
+  student_faculty_ratio +
+  private, data=alumni)
+
+final <- step(scope)
+summary(final)
+```
+
